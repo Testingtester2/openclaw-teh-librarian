@@ -26,13 +26,14 @@ guarding its home planet.
 
 ### Prerequisites
 
-- **Docker Desktop** — [Download here](https://www.docker.com/products/docker-desktop/)
-- **NVIDIA GPU** recommended (8-32GB VRAM), or CPU-only mode
-- Disk space depends on tier (2.6GB–34GB for model weights)
+- **NVIDIA GPU** recommended (8-48GB VRAM), or CPU-only mode
+- Disk space depends on tier (3.4GB–35GB for model weights)
+- **Docker Desktop** — needed for Docker install mode ([Download](https://www.docker.com/products/docker-desktop/))
+- **Node.js 18+** — needed for native install mode ([Download](https://nodejs.org))
 
 ### One-Click Setup
 
-The setup script walks you through choosing a model tier based on your GPU.
+The setup script walks you through choosing an install mode and model tier.
 
 **Linux / macOS:**
 ```bash
@@ -49,27 +50,41 @@ cd openclaw-agents
 .\setup.ps1
 ```
 
-**Skip the menu (pick a tier directly):**
-```bash
-./setup.sh --tier 2       # Linux/macOS — 8GB VRAM tier
-.\setup.ps1 -Tier 2       # Windows
-
-./setup.sh --cpu           # CPU-only shortcut (same as --tier 1)
-.\setup.ps1 -Cpu           # Windows
-```
-
 The setup script will:
-1. Ask you to pick a model tier (or use `--tier`/`--cpu`)
-2. Pull and start Ollama in Docker
-3. Download the selected Qwen3.5 model
-4. Configure OpenClaw to use it
-5. Start the OpenClaw Gateway with The Librarian's personality
-6. Build a sandbox image for isolated agent tool execution
-7. Open `http://localhost:18789` in your browser
+1. Ask how you want to install (**Docker** or **Native**)
+2. Ask you to pick a model tier based on your GPU VRAM
+3. Install and start Ollama + OpenClaw Gateway
+4. Download the selected Qwen3.5 model
+5. Open `http://localhost:18789` in your browser
+
+### Install Modes
+
+| Mode | Best for | Requires | Sandboxing |
+|------|----------|----------|------------|
+| **Docker** | Easy setup & cleanup | Docker Desktop | Full Docker sandbox isolation |
+| **Native** | Better GPU perf, VMs | Node.js 18+ | None (run in a VM for isolation) |
+
+> **Tip:** If you're running in a VM (Multipass, WSL2, etc.), native mode gives
+> the best performance and the VM itself provides isolation.
+
+**Skip the prompts (pick mode and tier directly):**
+```bash
+# Docker mode
+./setup.sh --docker --tier 2       # Linux/macOS
+.\setup.ps1 -Docker -Tier 2        # Windows
+
+# Native mode (recommended for VMs)
+./setup.sh --native --tier 3       # Linux/macOS
+.\setup.ps1 -Native -Tier 3        # Windows
+
+# CPU-only shortcut (same as --tier 1)
+./setup.sh --cpu
+.\setup.ps1 -Cpu
+```
 
 ### Manual Docker Compose
 
-If you prefer to run it directly:
+If you prefer to manage Docker directly (Docker mode only):
 
 ```bash
 # With GPU
