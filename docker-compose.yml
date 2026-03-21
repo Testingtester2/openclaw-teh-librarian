@@ -1,0 +1,84 @@
+###############################################################################
+# The Librarian — One-Click Dev Agent Setup
+# Powered by CoPaw + Ollama + Qwen3
+#
+# Usage:
+#   docker compose up -d          # Start everything
+#   docker compose logs -f copaw  # Watch CoPaw logs
+#   docker compose down           # Stop everything
+#
+# Then open http://localhost:8088 in your browser.
+###############################################################################
+
+services:
+  # ── Ollama: Local LLM Server ──────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: librarian-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # GPU is optional — remove the 'deploy' block above if you
+    # don't have an NVIDIA GPU. Ollama will fall back to CPU.
+
+  # ── Model Loader: Pulls qwen3 on first run ────────────────────
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: librarian-ollama-init
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: >
+      sh -c "
+        echo '⏳ Waiting for Ollama to start...'
+        until curl -sf http://ollama:11434/api/tags > /dev/null 2>&1; do
+          sleep 2
+        done
+        echo '📦 Pulling qwen3:8b (Q4_K_M ~5GB, fits 8GB+ VRAM)...'
+        curl -sf http://ollama:11434/api/pull -d '{\"name\":\"qwen3:8b\"}' | head -c 0
+        echo ''
+        echo '✅ Model ready! The Librarian is powered up.'
+      "
+    restart: "no"
+
+  # ── CoPaw: The Librarian's Workstation ─────────────────────────
+  copaw:
+    image: agentscope/copaw:latest
+    container_name: librarian-copaw
+    depends_on:
+      ollama:
+        condition: service_started
+    ports:
+      - "8088:8088"
+    volumes:
+      - copaw-data:/app/working
+      - copaw-secrets:/app/working.secret
+      - ./copaw/PROFILE.md:/app/working/PROFILE.md:ro
+      - ./copaw/skills:/app/working/customized_skills:ro
+    environment:
+      # Point CoPaw at the local Ollama instance
+      - COPAW_MODEL_PROVIDER=ollama
+      - COPAW_MODEL_NAME=qwen3:8b
+      - COPAW_OLLAMA_BASE_URL=http://ollama:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+    name: librarian-ollama-models
+  copaw-data:
+    name: librarian-copaw-data
+  copaw-secrets:
+    name: librarian-copaw-secrets
