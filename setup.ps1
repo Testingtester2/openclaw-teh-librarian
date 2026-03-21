@@ -13,18 +13,22 @@
 # Usage (run in PowerShell):
 #   .\setup.ps1                     # Interactive tier selection
 #   .\setup.ps1 -Cpu                # CPU-only mode
-#   .\setup.ps1 -Tier 3             # Skip menu, use tier 3 (12GB)
+#   .\setup.ps1 -Tier 3             # Skip menu, use tier 3 (16GB)
+#   .\setup.ps1 -Tier 4 -Coder      # Use qwen3-coder instead of qwen3.5
 #
 # Model Tiers:
 #   1  CPU-only   qwen3.5:4b            (~3.4GB)  Needs 8GB+ RAM
 #   2  8GB VRAM   qwen3.5:9b            (~6.6GB)  RTX 3060 / 4060
 #   3  16GB VRAM  qwen3.5:27b           (~17GB)   RTX 4080 / 4070Ti-16GB
 #   4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090
+#                 or qwen3-coder:30b-a3b (~19GB, code-specialized MoE)
 #   5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)
+#                 or qwen3-coder:30b-a3b-q8_0 (~32GB, code-specialized MoE Q8)
 ###############################################################################
 
 param(
     [switch]$Cpu,
+    [switch]$Coder,
     [switch]$Help,
     [ValidateRange(1,5)][int]$Tier = 0
 )
@@ -45,18 +49,21 @@ Write-Host "  +========================================================+" -Foreg
 Write-Host ""
 
 if ($Help) {
-    Write-Host "Usage: .\setup.ps1 [-Cpu] [-Tier <1-5>]"
+    Write-Host "Usage: .\setup.ps1 [-Cpu] [-Tier <1-5>] [-Coder]"
     Write-Host ""
     Write-Host "Options:"
     Write-Host "  -Cpu         Run without GPU (CPU-only inference, uses qwen3.5:4b)"
     Write-Host "  -Tier <N>    Skip the interactive menu and use tier N directly"
+    Write-Host "  -Coder       Use qwen3-coder (code-specialized) instead of qwen3.5 for tiers 4-5"
     Write-Host ""
     Write-Host "Tiers:"
     Write-Host "  1  CPU-only   qwen3.5:4b            (~3.4GB)  Needs 8GB+ RAM"
     Write-Host "  2  8GB VRAM   qwen3.5:9b            (~6.6GB)  RTX 3060 / 4060"
     Write-Host "  3  16GB VRAM  qwen3.5:27b           (~17GB)   RTX 4080 / 4070Ti-16GB"
     Write-Host "  4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090"
+    Write-Host "              or qwen3-coder:30b-a3b   (~19GB)   with -Coder"
     Write-Host "  5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)"
+    Write-Host "              or qwen3-coder:30b-a3b   (~32GB)   with -Coder (Q8)"
     exit 0
 }
 
@@ -96,6 +103,22 @@ $TierNotes = @{
     3 = "27B params, Q4_K_M quantization - strong reasoning, 256K context."
     4 = "35B params, Q4_K_M quantization - best quality dense model for 24GB VRAM."
     5 = "35B params, Q8_0 - max quality for 48GB+ VRAM."
+}
+
+# Coder model alternatives for tiers 4-5
+$CoderModels = @{
+    4 = "qwen3-coder:30b-a3b"
+    5 = "qwen3-coder:30b-a3b-q8_0"
+}
+
+$CoderSizes = @{
+    4 = "~19GB"
+    5 = "~32GB"
+}
+
+$CoderNotes = @{
+    4 = "30B MoE (3.3B active), Q4_K_M - code-specialized, fast inference, 256K context."
+    5 = "30B MoE (3.3B active), Q8_0 - max quality code-specialized agent."
 }
 
 # -- Check Docker -------------------------------------------------------------
@@ -151,8 +174,38 @@ if ($Tier -eq 0) {
     Write-Host ""
 }
 
-$Model = $TierModels[$Tier]
-$ModelSize = $TierSizes[$Tier]
+# -- Model variant selection (tiers 4-5) --------------------------------------
+# For tiers 4 and 5, offer a choice between qwen3.5 (general/agentic)
+# and qwen3-coder (code-specialized MoE).
+$UseCoder = $Coder
+
+if ($Tier -ge 4 -and -not $Coder) {
+    Write-Host ""
+    Write-Host "  Choose your model variant for tier $Tier`:" -ForegroundColor White
+    Write-Host ""
+    Write-Host "    a)  qwen3.5  - General-purpose, strong agentic reasoning, 256K context" -ForegroundColor Cyan
+    Write-Host "        $($TierModels[$Tier]) ($($TierSizes[$Tier]) download)"
+    Write-Host ""
+    Write-Host "    b)  qwen3-coder - Code-specialized MoE (3.3B active params, very fast)" -ForegroundColor Cyan
+    Write-Host "        $($CoderModels[$Tier]) ($($CoderSizes[$Tier]) download)"
+    Write-Host ""
+
+    do {
+        $variant = Read-Host "  Enter variant [a/b]"
+    } while ($variant -ne "a" -and $variant -ne "A" -and $variant -ne "b" -and $variant -ne "B")
+
+    if ($variant -eq "b" -or $variant -eq "B") { $UseCoder = $true }
+    Write-Host ""
+}
+
+if ($UseCoder -and $Tier -ge 4) {
+    $Model = $CoderModels[$Tier]
+    $ModelSize = $CoderSizes[$Tier]
+} else {
+    $Model = $TierModels[$Tier]
+    $ModelSize = $TierSizes[$Tier]
+}
+
 $CpuOnly = ($Tier -eq 1)
 
 Write-Info "Selected: $($TierLabels[$Tier])"
@@ -216,7 +269,11 @@ Write-Ok "Ollama is ready."
 
 # Pull model
 Write-Info "Pulling $Model ($ModelSize download, one-time operation)..."
-Write-Host "  $($TierNotes[$Tier])"
+if ($UseCoder -and $Tier -ge 4) {
+    Write-Host "  $($CoderNotes[$Tier])"
+} else {
+    Write-Host "  $($TierNotes[$Tier])"
+}
 Write-Host ""
 & docker exec librarian-ollama ollama pull $Model
 if ($LASTEXITCODE -ne 0) { Write-Err "Failed to pull model."; exit 1 }

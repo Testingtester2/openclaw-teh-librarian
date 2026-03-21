@@ -16,13 +16,16 @@
 #   ./setup.sh                      # Interactive tier selection
 #   ./setup.sh --cpu                # CPU-only mode (no GPU)
 #   ./setup.sh --tier <1-5>         # Skip menu, pick tier directly
+#   ./setup.sh --tier 4 --coder     # Use qwen3-coder instead of qwen3.5
 #
 # Model Tiers:
 #   1) CPU-only  — qwen3.5:4b            (~3.4GB download, needs 8GB+ RAM)
 #   2) 8GB VRAM  — qwen3.5:9b            (~6.6GB download)  [RTX 3060/4060]
 #   3) 16GB VRAM — qwen3.5:27b           (~17GB download)   [RTX 4080/4070Ti-16GB]
 #   4) 24GB VRAM — qwen3.5:35b           (~24GB download)   [RTX 4090]
+#                  or qwen3-coder:30b-a3b (~19GB, code-specialized MoE)
 #   5) 48GB VRAM — qwen3.5:35b-q8_0      (~35GB, Q8 quality) [A6000/dual GPU]
+#                  or qwen3-coder:30b-a3b-q8_0 (~32GB, code-specialized MoE Q8)
 ###############################################################################
 
 set -euo pipefail
@@ -61,9 +64,11 @@ echo -e "${NC}"
 # ── Parse args ──────────────────────────────────────────────────
 CPU_ONLY=false
 TIER=""
+USE_CODER=""
 for arg in "$@"; do
   case "$arg" in
     --cpu) CPU_ONLY=true; TIER=1 ;;
+    --coder) USE_CODER=true ;;
     --tier)
       # Next arg is the tier number — handled below
       ;;
@@ -74,18 +79,21 @@ for arg in "$@"; do
       fi
       ;;
     --help|-h)
-      echo "Usage: ./setup.sh [--cpu] [--tier <1-5>]"
+      echo "Usage: ./setup.sh [--cpu] [--tier <1-5>] [--coder]"
       echo ""
       echo "Options:"
       echo "  --cpu         Run without GPU (CPU-only inference, uses qwen3.5:4b)"
       echo "  --tier <N>    Skip the interactive menu and use tier N directly"
+      echo "  --coder       Use qwen3-coder (code-specialized) instead of qwen3.5 for tiers 4-5"
       echo ""
       echo "Tiers:"
       echo "  1  CPU-only   qwen3.5:4b            (~3.4GB)  Needs 8GB+ RAM"
       echo "  2  8GB VRAM   qwen3.5:9b            (~6.6GB)  RTX 3060 / 4060"
       echo "  3  16GB VRAM  qwen3.5:27b           (~17GB)   RTX 4080 / 4070Ti-16GB"
       echo "  4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090"
+      echo "              or qwen3-coder:30b-a3b   (~19GB)   with --coder"
       echo "  5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)"
+      echo "              or qwen3-coder:30b-a3b   (~32GB)   with --coder (Q8)"
       exit 0
       ;;
   esac
@@ -139,6 +147,21 @@ tier_label()   {
     3) echo "16GB VRAM   (qwen3.5:27b)            — RTX 4080 / 4070Ti-16GB" ;;
     4) echo "24GB VRAM   (qwen3.5:35b)            — RTX 4090" ;;
     5) echo "48GB VRAM   (qwen3.5:35b Q8)         — A6000 / dual GPU (best)" ;;
+  esac
+}
+
+# Coder model alternatives for tiers 4-5
+coder_model()  {
+  case "$1" in
+    4) echo "qwen3-coder:30b-a3b" ;;
+    5) echo "qwen3-coder:30b-a3b-q8_0" ;;
+  esac
+}
+
+coder_size()   {
+  case "$1" in
+    4) echo "~19GB" ;;
+    5) echo "~32GB" ;;
   esac
 }
 
@@ -198,8 +221,38 @@ case "$TIER" in
   *) error "Invalid tier: $TIER (must be 1-5)"; exit 1 ;;
 esac
 
-MODEL=$(tier_model "$TIER")
-MODEL_SIZE=$(tier_size "$TIER")
+# ── Model variant selection (tiers 4-5) ──────────────────────────
+# For tiers 4 and 5, offer a choice between qwen3.5 (general/agentic)
+# and qwen3-coder (code-specialized MoE).
+if [ "$TIER" -ge 4 ] && [ -z "$USE_CODER" ]; then
+  echo ""
+  echo -e "${BOLD}Choose your model variant for tier $TIER:${NC}"
+  echo ""
+  echo -e "  ${CYAN}a)${NC}  qwen3.5  — General-purpose, strong agentic reasoning, 256K context"
+  echo -e "      $(tier_model "$TIER") ($(tier_size "$TIER") download)"
+  echo ""
+  echo -e "  ${CYAN}b)${NC}  qwen3-coder — Code-specialized MoE (3.3B active params, very fast)"
+  echo -e "      $(coder_model "$TIER") ($(coder_size "$TIER") download)"
+  echo ""
+
+  while true; do
+    read -rp "  Enter variant [a/b]: " VARIANT
+    case "$VARIANT" in
+      a|A) USE_CODER=false; break ;;
+      b|B) USE_CODER=true; break ;;
+      *) echo -e "  ${RED}Please enter 'a' or 'b'.${NC}" ;;
+    esac
+  done
+  echo ""
+fi
+
+if [ "$USE_CODER" = "true" ] && [ "$TIER" -ge 4 ]; then
+  MODEL=$(coder_model "$TIER")
+  MODEL_SIZE=$(coder_size "$TIER")
+else
+  MODEL=$(tier_model "$TIER")
+  MODEL_SIZE=$(tier_size "$TIER")
+fi
 
 if [ "$TIER" = "1" ]; then
   CPU_ONLY=true
@@ -256,13 +309,20 @@ success "Ollama is ready."
 
 # Pull the model
 info "Pulling $MODEL ($MODEL_SIZE download, this is a one-time operation)..."
-case "$TIER" in
-  1) echo "  4B params — lightweight model for CPU inference. Needs 8GB+ system RAM." ;;
-  2) echo "  9B params, Q4_K_M quantization — fits comfortably in 8GB VRAM." ;;
-  3) echo "  27B params, Q4_K_M quantization — strong reasoning, 256K context." ;;
-  4) echo "  35B params, Q4_K_M quantization — best quality dense model for 24GB VRAM." ;;
-  5) echo "  35B params, Q8_0 — max quality for 48GB+ VRAM." ;;
-esac
+if [ "$USE_CODER" = "true" ] && [ "$TIER" -ge 4 ]; then
+  case "$TIER" in
+    4) echo "  30B MoE (3.3B active), Q4_K_M — code-specialized, fast inference, 256K context." ;;
+    5) echo "  30B MoE (3.3B active), Q8_0 — max quality code-specialized agent." ;;
+  esac
+else
+  case "$TIER" in
+    1) echo "  4B params — lightweight model for CPU inference. Needs 8GB+ system RAM." ;;
+    2) echo "  9B params, Q4_K_M quantization — fits comfortably in 8GB VRAM." ;;
+    3) echo "  27B params, Q4_K_M quantization — strong reasoning, 256K context." ;;
+    4) echo "  35B params, Q4_K_M quantization — best quality dense model for 24GB VRAM." ;;
+    5) echo "  35B params, Q8_0 — max quality for 48GB+ VRAM." ;;
+  esac
+fi
 echo ""
 docker exec librarian-ollama ollama pull "$MODEL"
 success "Model downloaded and ready."

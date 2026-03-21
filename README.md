@@ -134,9 +134,10 @@ To adjust sandbox settings, edit `openclaw/config.json5`. See the
 
 ### Model Tiers
 
-The installer lets you pick a model based on your hardware. All models are
-from the [Qwen3.5](https://github.com/QwenLM/Qwen3.5) family, Apache 2.0 licensed,
-with 256K native context window.
+The installer lets you pick a model based on your hardware. Models are from the
+[Qwen3.5](https://github.com/QwenLM/Qwen3.5) and
+[Qwen3-Coder](https://github.com/QwenLM/Qwen3-Coder) families, Apache 2.0 licensed,
+all with 256K native context window.
 
 | Tier | GPU Examples | Model | Params | Quant | Download | Min VRAM | Notes |
 |------|-------------|-------|--------|-------|----------|----------|-------|
@@ -144,7 +145,15 @@ with 256K native context window.
 | 2 — 8GB | RTX 3060 / 4060 | `qwen3.5:9b` | 9B | Q4_K_M | ~6.6GB | 6GB | **Default tier.** Strong all-round coding |
 | 3 — 16GB | RTX 4080 / 4070Ti-16GB | `qwen3.5:27b` | 27B | Q4_K_M | ~17GB | 14GB | Big jump in reasoning & code quality |
 | 4 — 24GB | RTX 4090 | `qwen3.5:35b` | 35B | Q4_K_M | ~24GB | 20GB | Best quality dense model |
+| | | *or* `qwen3-coder:30b-a3b` | 30B MoE (3.3B active) | Q4_K_M | ~19GB | 14GB | Code-specialized, very fast |
 | 5 — 48GB | A6000 / dual GPU | `qwen3.5:35b-q8_0` | 35B | Q8_0 | ~35GB | 40GB | Max quality (Q8 quantization) |
+| | | *or* `qwen3-coder:30b-a3b-q8_0` | 30B MoE (3.3B active) | Q8_0 | ~32GB | 28GB | Max quality code-specialized |
+
+For tiers 4-5, the setup script asks you to choose between:
+- **qwen3.5** — Best all-round agentic model (reasoning, planning, multimodal)
+- **qwen3-coder** — Code-specialized MoE with only 3.3B active params (faster inference, 70% code training)
+
+Use `--coder` (Linux/macOS) or `-Coder` (Windows) to skip the prompt and pick qwen3-coder directly.
 
 **Which tier should I pick?**
 - Run `nvidia-smi` to check your VRAM
