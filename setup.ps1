@@ -16,11 +16,11 @@
 #   .\setup.ps1 -Tier 3             # Skip menu, use tier 3 (12GB)
 #
 # Model Tiers:
-#   1  CPU-only   qwen3:4b    (~2.6GB)  Needs 8GB+ RAM
-#   2  8GB VRAM   qwen3:8b    (~5GB)    RTX 3060 / 4060
-#   3  12GB VRAM  qwen3:14b   (~9.3GB)  RTX 4070 / 3060-12GB
-#   4  16GB VRAM  qwen3:32b   (~20GB)   RTX 4080 / 4070Ti-16GB
-#   5  32GB VRAM  qwen3:32b   (~20GB)   RTX 4090 / A6000 (Q8 quality)
+#   1  CPU-only   qwen3:4b              (~2.6GB)  Needs 8GB+ RAM
+#   2  8GB VRAM   qwen3:8b              (~5GB)    RTX 3060 / 4060
+#   3  12GB VRAM  qwen3:14b             (~9.3GB)  RTX 4070 / 3060-12GB
+#   4  16GB VRAM  qwen3-coder:30b-a3b   (~19GB)   RTX 4080 / 4070Ti-16GB
+#   5  32GB VRAM  qwen3-coder:30b-a3b   (~32GB)   RTX 4090 / A6000 (Q8)
 ###############################################################################
 
 param(
@@ -52,11 +52,11 @@ if ($Help) {
     Write-Host "  -Tier <N>    Skip the interactive menu and use tier N directly"
     Write-Host ""
     Write-Host "Tiers:"
-    Write-Host "  1  CPU-only   qwen3:4b    (~2.6GB)  Needs 8GB+ RAM"
-    Write-Host "  2  8GB VRAM   qwen3:8b    (~5GB)    RTX 3060 / 4060"
-    Write-Host "  3  12GB VRAM  qwen3:14b   (~9.3GB)  RTX 4070 / 3060-12GB"
-    Write-Host "  4  16GB VRAM  qwen3:32b   (~20GB)   RTX 4080 / 4070Ti-16GB"
-    Write-Host "  5  32GB VRAM  qwen3:32b   (~20GB)   RTX 4090 / A6000 (Q8 quality)"
+    Write-Host "  1  CPU-only   qwen3:4b              (~2.6GB)  Needs 8GB+ RAM"
+    Write-Host "  2  8GB VRAM   qwen3:8b              (~5GB)    RTX 3060 / 4060"
+    Write-Host "  3  12GB VRAM  qwen3:14b             (~9.3GB)  RTX 4070 / 3060-12GB"
+    Write-Host "  4  16GB VRAM  qwen3-coder:30b-a3b   (~19GB)   RTX 4080 / 4070Ti-16GB"
+    Write-Host "  5  32GB VRAM  qwen3-coder:30b-a3b   (~32GB)   RTX 4090 / A6000 (Q8)"
     exit 0
 }
 
@@ -70,32 +70,32 @@ $TierModels = @{
     1 = "qwen3:4b"
     2 = "qwen3:8b"
     3 = "qwen3:14b"
-    4 = "qwen3:32b"
-    5 = "qwen3:32b-q8_0"
+    4 = "qwen3-coder:30b-a3b"
+    5 = "qwen3-coder:30b-a3b-q8_0"
 }
 
 $TierSizes = @{
     1 = "~2.6GB"
     2 = "~5GB"
     3 = "~9.3GB"
-    4 = "~20GB"
-    5 = "~34GB"
+    4 = "~19GB"
+    5 = "~32GB"
 }
 
 $TierLabels = @{
-    1 = "CPU-only    (qwen3:4b)     - Lightweight, needs 8GB+ RAM"
-    2 = "8GB VRAM    (qwen3:8b)     - RTX 3060 / 4060"
-    3 = "12GB VRAM   (qwen3:14b)    - RTX 4070 / 3060-12GB"
-    4 = "16GB VRAM   (qwen3:32b)    - RTX 4080 / 4070Ti-16GB"
-    5 = "32GB VRAM   (qwen3:32b Q8) - RTX 4090 / A6000 (best quality)"
+    1 = "CPU-only    (qwen3:4b)              - Lightweight, needs 8GB+ RAM"
+    2 = "8GB VRAM    (qwen3:8b)              - RTX 3060 / 4060"
+    3 = "12GB VRAM   (qwen3:14b)             - RTX 4070 / 3060-12GB"
+    4 = "16GB VRAM   (qwen3-coder:30b-a3b)   - RTX 4080 / 4070Ti-16GB"
+    5 = "32GB VRAM   (qwen3-coder:30b-a3b Q8)- RTX 4090 / A6000 (best)"
 }
 
 $TierNotes = @{
     1 = "4B params - lightweight model for CPU inference. Needs 8GB+ system RAM."
     2 = "8B params, Q4_K_M quantization - fits comfortably in 8GB VRAM."
     3 = "14B params, Q4_K_M quantization - strong reasoning, fits 12GB VRAM."
-    4 = "32B dense params, Q4_K_M quantization - top-tier local model for 16GB VRAM."
-    5 = "32B dense params, Q8_0 quantization - maximum quality for 32GB VRAM."
+    4 = "30B MoE (3B active), Q4_K_M - coding-specialized agent model for 16GB VRAM."
+    5 = "30B MoE (3B active), Q8_0 - max quality coding agent for 32GB VRAM."
 }
 
 # -- Check Docker -------------------------------------------------------------
@@ -227,7 +227,7 @@ Write-Info "Configuring OpenClaw to use $Model..."
 $configPath = Join-Path $scriptDir "openclaw" "config.json5"
 if (Test-Path $configPath) {
     $content = Get-Content $configPath -Raw
-    $content = $content -replace 'name: "qwen3:[^"]*"', "name: `"$Model`""
+    $content = $content -replace 'name: "qwen3[^"]*"', "name: `"$Model`""
     Set-Content -Path $configPath -Value $content -NoNewline
     Write-Ok "Config updated: model set to $Model"
 } else {

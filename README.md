@@ -142,8 +142,8 @@ from the [Qwen3](https://github.com/QwenLM/Qwen3) family, Apache 2.0 licensed.
 | 1 — CPU | No GPU needed | `qwen3:4b` | 4B | Q4_K_M | ~2.6GB | N/A (8GB+ RAM) | Fast on modern CPUs. Good for simple tasks |
 | 2 — 8GB | RTX 3060 / 4060 | `qwen3:8b` | 8B | Q4_K_M | ~5GB | 6GB | **Default tier.** Strong all-round coding |
 | 3 — 12GB | RTX 4070 / 3060-12GB | `qwen3:14b` | 14B | Q4_K_M | ~9.3GB | 10GB | Big jump in reasoning & code quality |
-| 4 — 16GB | RTX 4080 / 4070Ti-16GB | `qwen3:32b` | 32B | Q4_K_M | ~20GB | 16GB | Top-tier dense model, excellent agentic |
-| 5 — 32GB | RTX 4090 / A6000 | `qwen3:32b-q8_0` | 32B | Q8_0 | ~34GB | 24GB | Same 32B model at maximum fidelity |
+| 4 — 16GB | RTX 4080 / 4070Ti-16GB | `qwen3-coder:30b-a3b` | 30B MoE (3B active) | Q4_K_M | ~19GB | 14GB | Coding-specialized agent model, 256K context |
+| 5 — 32GB | RTX 4090 / A6000 | `qwen3-coder:30b-a3b-q8_0` | 30B MoE (3B active) | Q8_0 | ~32GB | 28GB | Max quality coding agent |
 
 **Which tier should I pick?**
 - Run `nvidia-smi` to check your VRAM
@@ -199,8 +199,8 @@ See the **Model Tiers** table above for full details. Quick summary:
 | No GPU | — | `--tier 1` or `--cpu` | Usable (CPU inference) |
 | RTX 3060 / 4060 | 8GB | `--tier 2` | Good (~40 tok/s) |
 | RTX 4070 / 3060-12GB | 12GB | `--tier 3` | Great (~60 tok/s) |
-| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 4` | Excellent |
-| RTX 4090 / A6000 | 24-48GB | `--tier 5` | Best quality |
+| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 4` | Excellent (MoE, fast) |
+| RTX 4090 / A6000 | 24-48GB | `--tier 5` | Best quality (MoE Q8) |
 
 Speeds are approximate and depend on context length and system configuration.
 

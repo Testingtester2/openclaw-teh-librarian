@@ -18,11 +18,11 @@
 #   ./setup.sh --tier <1-5>         # Skip menu, pick tier directly
 #
 # Model Tiers:
-#   1) CPU-only  — qwen3:4b    (~2.6GB download, needs 8GB+ RAM)
-#   2) 8GB VRAM  — qwen3:8b    (~5GB download)   [RTX 3060/4060]
-#   3) 12GB VRAM — qwen3:14b   (~9.3GB download)  [RTX 4070/3060-12GB]
-#   4) 16GB VRAM — qwen3:32b   (~20GB download)   [RTX 4080/4070Ti-16GB]
-#   5) 32GB VRAM — qwen3:32b   (~20GB, Q8 quality) [RTX 4090/A6000]
+#   1) CPU-only  — qwen3:4b              (~2.6GB download, needs 8GB+ RAM)
+#   2) 8GB VRAM  — qwen3:8b              (~5GB download)   [RTX 3060/4060]
+#   3) 12GB VRAM — qwen3:14b             (~9.3GB download)  [RTX 4070/3060-12GB]
+#   4) 16GB VRAM — qwen3-coder:30b-a3b   (~19GB download)   [RTX 4080/4070Ti-16GB]
+#   5) 32GB VRAM — qwen3-coder:30b-a3b   (~32GB, Q8 quality) [RTX 4090/A6000]
 ###############################################################################
 
 set -euo pipefail
@@ -81,11 +81,11 @@ for arg in "$@"; do
       echo "  --tier <N>    Skip the interactive menu and use tier N directly"
       echo ""
       echo "Tiers:"
-      echo "  1  CPU-only   qwen3:4b    (~2.6GB)  Needs 8GB+ RAM"
-      echo "  2  8GB VRAM   qwen3:8b    (~5GB)    RTX 3060 / 4060"
-      echo "  3  12GB VRAM  qwen3:14b   (~9.3GB)  RTX 4070 / 3060-12GB"
-      echo "  4  16GB VRAM  qwen3:32b   (~20GB)   RTX 4080 / 4070Ti-16GB"
-      echo "  5  32GB VRAM  qwen3:32b   (~20GB)   RTX 4090 / A6000 (Q8 quality)"
+      echo "  1  CPU-only   qwen3:4b              (~2.6GB)  Needs 8GB+ RAM"
+      echo "  2  8GB VRAM   qwen3:8b              (~5GB)    RTX 3060 / 4060"
+      echo "  3  12GB VRAM  qwen3:14b             (~9.3GB)  RTX 4070 / 3060-12GB"
+      echo "  4  16GB VRAM  qwen3-coder:30b-a3b   (~19GB)   RTX 4080 / 4070Ti-16GB"
+      echo "  5  32GB VRAM  qwen3-coder:30b-a3b   (~32GB)   RTX 4090 / A6000 (Q8)"
       exit 0
       ;;
   esac
@@ -117,8 +117,8 @@ tier_model()   {
     1) echo "qwen3:4b" ;;
     2) echo "qwen3:8b" ;;
     3) echo "qwen3:14b" ;;
-    4) echo "qwen3:32b" ;;
-    5) echo "qwen3:32b-q8_0" ;;
+    4) echo "qwen3-coder:30b-a3b" ;;
+    5) echo "qwen3-coder:30b-a3b-q8_0" ;;
   esac
 }
 
@@ -127,18 +127,18 @@ tier_size()    {
     1) echo "~2.6GB" ;;
     2) echo "~5GB" ;;
     3) echo "~9.3GB" ;;
-    4) echo "~20GB" ;;
-    5) echo "~34GB" ;;
+    4) echo "~19GB" ;;
+    5) echo "~32GB" ;;
   esac
 }
 
 tier_label()   {
   case "$1" in
-    1) echo "CPU-only    (qwen3:4b)     — Lightweight, needs 8GB+ RAM" ;;
-    2) echo "8GB VRAM    (qwen3:8b)     — RTX 3060 / 4060" ;;
-    3) echo "12GB VRAM   (qwen3:14b)    — RTX 4070 / 3060-12GB" ;;
-    4) echo "16GB VRAM   (qwen3:32b)    — RTX 4080 / 4070Ti-16GB" ;;
-    5) echo "32GB VRAM   (qwen3:32b Q8) — RTX 4090 / A6000 (best quality)" ;;
+    1) echo "CPU-only    (qwen3:4b)              — Lightweight, needs 8GB+ RAM" ;;
+    2) echo "8GB VRAM    (qwen3:8b)              — RTX 3060 / 4060" ;;
+    3) echo "12GB VRAM   (qwen3:14b)             — RTX 4070 / 3060-12GB" ;;
+    4) echo "16GB VRAM   (qwen3-coder:30b-a3b)   — RTX 4080 / 4070Ti-16GB" ;;
+    5) echo "32GB VRAM   (qwen3-coder:30b-a3b Q8)— RTX 4090 / A6000 (best)" ;;
   esac
 }
 
@@ -260,8 +260,8 @@ case "$TIER" in
   1) echo "  4B params — lightweight model for CPU inference. Needs 8GB+ system RAM." ;;
   2) echo "  8B params, Q4_K_M quantization — fits comfortably in 8GB VRAM." ;;
   3) echo "  14B params, Q4_K_M quantization — strong reasoning, fits 12GB VRAM." ;;
-  4) echo "  32B dense params, Q4_K_M quantization — top-tier local model for 16GB VRAM." ;;
-  5) echo "  32B dense params, Q8_0 quantization — maximum quality for 32GB VRAM." ;;
+  4) echo "  30B MoE (3B active), Q4_K_M — coding-specialized agent model for 16GB VRAM." ;;
+  5) echo "  30B MoE (3B active), Q8_0 — max quality coding agent for 32GB VRAM." ;;
 esac
 echo ""
 docker exec librarian-ollama ollama pull "$MODEL"
@@ -273,7 +273,7 @@ info "Configuring OpenClaw to use $MODEL..."
 CONFIG_FILE="openclaw/config.json5"
 if [ -f "$CONFIG_FILE" ]; then
   # Replace the model name line in config.json5
-  sed -i.bak "s|name: \"qwen3:[^\"]*\"|name: \"$MODEL\"|" "$CONFIG_FILE" && rm -f "${CONFIG_FILE}.bak"
+  sed -i.bak "s|name: \"qwen3[^\"]*\"|name: \"$MODEL\"|" "$CONFIG_FILE" && rm -f "${CONFIG_FILE}.bak"
   success "Config updated: model set to $MODEL"
 else
   warn "Config file not found at $CONFIG_FILE — you may need to set the model manually."
