@@ -79,6 +79,26 @@ function Write-Ok($msg)      { Write-Host "[OK]    $msg" -ForegroundColor Green 
 function Write-Warn($msg)    { Write-Host "[WARN]  $msg" -ForegroundColor Yellow }
 function Write-Err($msg)     { Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
+# -- Check / Install Git ------------------------------------------------------
+$gitCmd = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitCmd) {
+    Write-Info "Git is not installed. Installing via winget..."
+    $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wingetCmd) {
+        winget install Git.Git --accept-package-agreements --accept-source-agreements
+        # Refresh PATH
+        $env:PATH = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    }
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $gitCmd) {
+        Write-Err "Could not install git. Please install from https://git-scm.com and re-run."
+        exit 1
+    }
+    Write-Ok "Git installed."
+} else {
+    Write-Ok "Git is available."
+}
+
 # -- Model tier definitions ---------------------------------------------------
 $TierModels = @{
     1 = "qwen3.5:4b"

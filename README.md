@@ -30,33 +30,39 @@ guarding its home planet.
 - **NVIDIA GPU** recommended (8-48GB VRAM), or CPU-only mode
 - Disk space depends on tier (3.4GB–35GB for model weights)
 
-> **Note:** The setup script will offer to install Docker, Ollama, Node.js,
-> and other dependencies automatically. You don't need to install anything
-> beforehand except `git` to clone this repo.
+> **Note:** The setup script auto-installs all dependencies (git, Docker,
+> Ollama, Node.js, etc.). You don't need to pre-install anything.
 
-### One-Click Setup
+### One-Click Install
 
-The setup script walks you through choosing an install mode and model tier.
+Copy-paste one command to get started. The script handles everything else.
+
+**Windows (PowerShell — run as Administrator):**
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; winget install Git.Git --accept-package-agreements --accept-source-agreements; $env:PATH = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User'); git clone https://github.com/Testingtester2/openclaw-agents.git; cd openclaw-agents; .\setup.ps1
+```
 
 **Linux / macOS:**
 ```bash
-git clone https://github.com/Testingtester2/openclaw-agents.git
-cd openclaw-agents
-chmod +x setup.sh
-./setup.sh
+command -v git >/dev/null || { echo "Installing git..."; sudo apt-get update && sudo apt-get install -y git || sudo dnf install -y git || brew install git; }; git clone https://github.com/Testingtester2/openclaw-agents.git && cd openclaw-agents && chmod +x setup.sh && ./setup.sh
 ```
 
-**Windows (PowerShell):**
-```powershell
+**Or step by step (if you already have git):**
+```bash
 git clone https://github.com/Testingtester2/openclaw-agents.git
 cd openclaw-agents
+
+# Linux / macOS
+chmod +x setup.sh && ./setup.sh
+
+# Windows (PowerShell)
 .\setup.ps1
 ```
 
 The setup script will:
 1. Ask how you want to install (**Docker** or **Native**)
 2. Ask you to pick a model tier based on your GPU VRAM
-3. Install and start Ollama + OpenClaw Gateway
+3. Auto-install all dependencies (Docker/Ollama/Node.js/OpenClaw)
 4. Download the selected Qwen3.5 model
 5. Open `http://localhost:18789` in your browser
 

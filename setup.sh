@@ -128,6 +128,24 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# ── Check / Install Git ───────────────────────────────────────
+if ! command -v git &> /dev/null; then
+  info "Git is not installed. Installing..."
+  if command -v apt-get &> /dev/null; then
+    sudo apt-get update && sudo apt-get install -y git
+  elif command -v dnf &> /dev/null; then
+    sudo dnf install -y git
+  elif command -v brew &> /dev/null; then
+    brew install git
+  else
+    error "Could not install git. Please install git and re-run."
+    exit 1
+  fi
+  success "Git installed."
+else
+  success "Git is available."
+fi
+
 # ── Model tier definitions ─────────────────────────────────────
 # Each tier: MODEL_TAG  DOWNLOAD_SIZE  DESCRIPTION
 tier_model()   {
