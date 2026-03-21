@@ -101,7 +101,7 @@ for arg in "$@"; do
       echo "  4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090"
       echo "              or qwen3-coder:30b-a3b   (~19GB)   with --coder"
       echo "  5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)"
-      echo "              or qwen3-coder:30b-a3b   (~32GB)   with --coder (Q8)"
+      echo "              or qwen3-coder:30b-a3b-q8_0 (~32GB) with --coder (Q8)"
       exit 0
       ;;
   esac
@@ -156,7 +156,7 @@ tier_label()   {
     2) echo "8GB VRAM    (qwen3.5:9b)             — RTX 3060 / 4060" ;;
     3) echo "16GB VRAM   (qwen3.5:27b)            — RTX 4080 / 4070Ti-16GB" ;;
     4) echo "24GB VRAM   (qwen3.5:35b)            — RTX 4090" ;;
-    5) echo "48GB VRAM   (qwen3.5:35b Q8)         — A6000 / dual GPU (best)" ;;
+    5) echo "48GB VRAM   (qwen3.5:35b-q8_0)       — A6000 / dual GPU (best)" ;;
   esac
 }
 
@@ -295,16 +295,72 @@ echo ""
 ###############################################################################
 if [ "$INSTALL_MODE" = "docker" ]; then
 
-  # ── Check Docker ──────────────────────────────────────────────
+  # ── Check / Install Docker ────────────────────────────────────
   info "Checking for Docker..."
   if ! command -v docker &> /dev/null; then
-    error "Docker is not installed."
+    warn "Docker is not installed."
     echo ""
-    echo "  Install Docker Desktop from:"
-    echo "    https://www.docker.com/products/docker-desktop/"
-    echo ""
-    echo "  Then re-run this script."
-    exit 1
+    if [[ "$OSTYPE" == "linux"* ]]; then
+      echo -e "  ${BOLD}Install Docker Engine now?${NC}"
+      echo "  This will run the official Docker install script (https://get.docker.com)."
+      echo ""
+      read -rp "  Install Docker? [Y/n]: " INSTALL_DOCKER
+      case "${INSTALL_DOCKER:-Y}" in
+        n|N|no|No)
+          echo ""
+          echo "  Install Docker manually from https://www.docker.com/products/docker-desktop/"
+          echo "  Then re-run this script."
+          exit 1
+          ;;
+        *)
+          info "Installing Docker Engine..."
+          curl -fsSL https://get.docker.com | sh
+          # Add current user to docker group so we don't need sudo
+          if [ "$(id -u)" -ne 0 ]; then
+            sudo usermod -aG docker "$USER"
+            warn "Added $USER to 'docker' group. You may need to log out and back in,"
+            warn "or run 'newgrp docker' before re-running this script."
+          fi
+          if ! command -v docker &> /dev/null; then
+            error "Docker installation failed. Please install manually."
+            exit 1
+          fi
+          success "Docker installed."
+          ;;
+      esac
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+      if command -v brew &> /dev/null; then
+        echo -e "  ${BOLD}Install Docker Desktop via Homebrew?${NC}"
+        read -rp "  Install Docker? [Y/n]: " INSTALL_DOCKER
+        case "${INSTALL_DOCKER:-Y}" in
+          n|N|no|No)
+            echo ""
+            echo "  Install Docker Desktop from https://www.docker.com/products/docker-desktop/"
+            echo "  Then re-run this script."
+            exit 1
+            ;;
+          *)
+            info "Installing Docker Desktop via Homebrew..."
+            brew install --cask docker
+            echo ""
+            warn "Docker Desktop installed. Please open it from Applications to start the daemon,"
+            warn "then re-run this script."
+            exit 0
+            ;;
+        esac
+      else
+        error "Docker is not installed."
+        echo ""
+        echo "  Install Docker Desktop from:"
+        echo "    https://www.docker.com/products/docker-desktop/"
+        echo ""
+        echo "  Then re-run this script."
+        exit 1
+      fi
+    else
+      error "Docker is not installed. Please install from https://www.docker.com/products/docker-desktop/"
+      exit 1
+    fi
   fi
 
   if ! docker info &> /dev/null 2>&1; then
@@ -321,17 +377,17 @@ if [ "$INSTALL_MODE" = "docker" ]; then
   success "Docker Compose available."
 
   # ── GPU Check ─────────────────────────────────────────────────
+  COMPOSE_FILES=(-f docker-compose.yml)
   if [ "$CPU_ONLY" = true ]; then
     warn "CPU-only mode. Inference will be slower but functional."
-    COMPOSE_FILES="-f docker-compose.yml -f docker-compose.cpu.yml"
+    COMPOSE_FILES+=(-f docker-compose.cpu.yml)
   else
     if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
       success "NVIDIA GPU detected."
-      COMPOSE_FILES="-f docker-compose.yml"
     else
       warn "No NVIDIA GPU detected. Falling back to CPU-only mode."
       warn "Use --cpu flag to suppress this warning."
-      COMPOSE_FILES="-f docker-compose.yml -f docker-compose.cpu.yml"
+      COMPOSE_FILES+=(-f docker-compose.cpu.yml)
       CPU_ONLY=true
     fi
   fi
@@ -344,11 +400,11 @@ if [ "$INSTALL_MODE" = "docker" ]; then
 
   # Pull images first
   info "Pulling Docker images (this may take a few minutes on first run)..."
-  docker compose $COMPOSE_FILES pull
+  docker compose "${COMPOSE_FILES[@]}" pull
 
   # Start Ollama and OpenClaw Gateway
   info "Starting Ollama + OpenClaw Gateway..."
-  docker compose $COMPOSE_FILES up -d ollama openclaw-gateway
+  docker compose "${COMPOSE_FILES[@]}" up -d ollama openclaw-gateway
 
   # Wait for Ollama to be ready
   info "Waiting for Ollama to initialize..."
@@ -376,7 +432,7 @@ if [ "$INSTALL_MODE" = "docker" ]; then
   info "Configuring OpenClaw to use $MODEL..."
   CONFIG_FILE="openclaw/config.json5"
   if [ -f "$CONFIG_FILE" ]; then
-    sed -i.bak "s|name: \"qwen[^\"]*\"|name: \"$MODEL\"|" "$CONFIG_FILE" && rm -f "${CONFIG_FILE}.bak"
+    sed -i.bak "s|name: \"[^\"]*\"|name: \"$MODEL\"|" "$CONFIG_FILE" && rm -f "${CONFIG_FILE}.bak"
     success "Config updated: model set to $MODEL"
   else
     warn "Config file not found at $CONFIG_FILE — you may need to set the model manually."
@@ -483,7 +539,7 @@ if [ "$INSTALL_MODE" = "native" ]; then
       # Start in background (macOS or non-systemd Linux)
       ollama serve &> /dev/null &
       OLLAMA_PID=$!
-      disown $OLLAMA_PID 2>/dev/null || true
+      disown "$OLLAMA_PID" 2>/dev/null || true
     fi
 
     # Wait for Ollama to be ready
@@ -601,7 +657,7 @@ NATIVECONF
   else
     openclaw serve --config "$OPENCLAW_DIR/config.json5" &> "$OPENCLAW_DIR/gateway.log" &
     GATEWAY_PID=$!
-    disown $GATEWAY_PID 2>/dev/null || true
+    disown "$GATEWAY_PID" 2>/dev/null || true
 
     RETRIES=0
     MAX_RETRIES=30

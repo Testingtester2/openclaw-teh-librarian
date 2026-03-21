@@ -9,9 +9,10 @@ The Librarian is a **one-click local AI developer assistant** built on
 GPU (8GB–48GB VRAM) or run CPU-only. Everything runs on your machine — no
 API keys, no cloud, no data leaving your network.
 
-Agent tool execution is **sandboxed inside isolated Docker containers** with
-no network access by default, so The Librarian can read your code but
-can't phone home or damage your host.
+In Docker mode, agent tool execution is **sandboxed inside isolated containers**
+with no network access by default. In native mode, we recommend running inside
+a VM for isolation. Either way, The Librarian can read your code but can't
+phone home or damage your host.
 
 The Librarian's personality is rooted in the
 [Shiba Eternity](https://shiba-eternity.fandom.com/wiki/Shiba_Eternity_Wiki)
@@ -28,8 +29,10 @@ guarding its home planet.
 
 - **NVIDIA GPU** recommended (8-48GB VRAM), or CPU-only mode
 - Disk space depends on tier (3.4GB–35GB for model weights)
-- **Docker Desktop** — needed for Docker install mode ([Download](https://www.docker.com/products/docker-desktop/))
-- **Node.js 18+** — needed for native install mode ([Download](https://nodejs.org))
+
+> **Note:** The setup script will offer to install Docker, Ollama, Node.js,
+> and other dependencies automatically. You don't need to install anything
+> beforehand except `git` to clone this repo.
 
 ### One-Click Setup
 
@@ -59,10 +62,10 @@ The setup script will:
 
 ### Install Modes
 
-| Mode | Best for | Requires | Sandboxing |
-|------|----------|----------|------------|
-| **Docker** | Easy setup & cleanup | Docker Desktop | Full Docker sandbox isolation |
-| **Native** | Better GPU perf, VMs | Node.js 18+ | None (run in a VM for isolation) |
+| Mode | Best for | Auto-installs | Sandboxing |
+|------|----------|---------------|------------|
+| **Docker** | Easy setup & cleanup | Docker Engine (Linux) or Docker Desktop (macOS via Homebrew) | Full Docker sandbox isolation |
+| **Native** | Better GPU perf, VMs | Ollama, Node.js, OpenClaw Gateway | None (run in a VM for isolation) |
 
 > **Tip:** If you're running in a VM (Multipass, WSL2, etc.), native mode gives
 > the best performance and the VM itself provides isolation.
@@ -131,10 +134,10 @@ The Librarian is a full-stack developer sage from Shibatopia with:
 - The philosophy of **Ryoshi's Way** — decentralization, open source, clean interfaces
 - Respect for **Bark Power** — your time and compute resources are finite
 
-### Sandboxing
+### Sandboxing & Isolation
 
-Agent tool execution (shell commands, file writes) runs inside **isolated Docker
-containers** that are separate from your host machine:
+**Docker mode:** Agent tool execution (shell commands, file writes) runs inside
+**isolated Docker containers** that are separate from your host machine:
 
 - **No network** — sandbox containers cannot reach the internet by default
 - **Read-only root** — the sandbox filesystem is immutable
@@ -144,8 +147,13 @@ containers** that are separate from your host machine:
 To adjust sandbox settings, edit `openclaw/config.json5`. See the
 [OpenClaw sandboxing docs](https://docs.openclaw.ai/gateway/sandboxing) for details.
 
-> **Note:** The Ollama server runs *outside* the sandbox (it needs GPU access),
-> but it only serves model inference — it has no access to your files or shell.
+**Native mode:** No Docker sandboxing is used. The agent runs directly on the
+host. For isolation, run the setup inside a VM. Tool approval policies still
+apply — dangerous commands (`rm`, `sudo`) require manual approval.
+
+> **Note:** The Ollama server runs separately from the agent (it needs GPU
+> access), but it only serves model inference — it has no access to your
+> files or shell.
 
 ### Model Tiers
 
@@ -176,21 +184,25 @@ Use `--coder` (Linux/macOS) or `-Coder` (Windows) to skip the prompt and pick qw
 - **Not sure?** Tier 2 (8GB) is a safe default — it runs well on most gaming GPUs
 - **Want the best local experience?** Tier 4/5 if your GPU can handle it
 
-**Switching tiers later:**
+**Switching tiers later (Docker):**
 ```bash
-# Pull the new model
 docker exec librarian-ollama ollama pull qwen3.5:27b
-
-# Update config
 # Edit openclaw/config.json5 → change model.name to "qwen3.5:27b"
-
-# Restart gateway to pick up the change
 docker compose restart openclaw-gateway
+```
+
+**Switching tiers later (Native):**
+```bash
+ollama pull qwen3.5:27b
+# Edit ~/.openclaw/config.json5 → change model.name to "qwen3.5:27b"
+pkill -f 'openclaw serve' && openclaw serve --config ~/.openclaw/config.json5 &
 ```
 
 ---
 
 ## Useful Commands
+
+### Docker Mode
 
 ```bash
 # View logs
@@ -206,11 +218,32 @@ docker compose up -d
 # Update to latest images
 docker compose pull && docker compose up -d
 
-# Switch models (e.g., smaller for weaker hardware)
+# Switch models
 docker exec librarian-ollama ollama pull qwen3.5:4b
+# Then edit openclaw/config.json5 → model.name
+```
 
-# Rebuild sandbox image
-docker build -t openclaw-sandbox:bookworm-slim -f - . < sandbox.Dockerfile
+### Native Mode
+
+```bash
+# View gateway logs
+tail -f ~/.openclaw/gateway.log
+
+# Check running models
+ollama ps
+
+# Unload model from VRAM
+ollama stop qwen3.5:9b
+
+# Stop gateway
+pkill -f 'openclaw serve'
+
+# Stop Ollama (systemd)
+sudo systemctl stop ollama
+
+# Switch models
+ollama pull qwen3.5:27b
+# Then edit ~/.openclaw/config.json5 → model.name
 ```
 
 ---
@@ -219,21 +252,24 @@ docker build -t openclaw-sandbox:bookworm-slim -f - . < sandbox.Dockerfile
 
 See the **Model Tiers** table above for full details. Quick summary:
 
-| Your GPU | VRAM | Run `./setup.sh --tier` | Expected Speed |
-|----------|------|-------------------------|----------------|
-| No GPU | — | `--tier 1` or `--cpu` | Usable (CPU inference) |
-| RTX 3060 / 4060 | 8GB | `--tier 2` | Good (~40 tok/s) |
-| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 3` | Great (~30 tok/s) |
-| RTX 4090 | 24GB | `--tier 4` | Excellent (~25 tok/s) |
-| A6000 / dual GPU | 48GB+ | `--tier 5` | Best quality (Q8) |
+| Your GPU | VRAM | Run `./setup.sh --tier` | Experience |
+|----------|------|-------------------------|------------|
+| No GPU | — | `--tier 1` or `--cpu` | Usable (slower, CPU inference) |
+| RTX 3060 / 4060 | 8GB | `--tier 2` | Good (9B model, fast) |
+| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 3` | Great (27B model, strong reasoning) |
+| RTX 4090 | 24GB | `--tier 4` | Excellent (35B model, best dense) |
+| A6000 / dual GPU | 48GB+ | `--tier 5` | Best quality (35B Q8 quantization) |
 
-Speeds are approximate and depend on context length and system configuration.
+Speed depends on model size, context length, and system configuration. Larger
+models are smarter but generate tokens more slowly on the same hardware.
 
 ---
 
 ## Security
 
-This setup follows OpenClaw's security recommendations:
+### Docker Mode
+
+Docker mode follows OpenClaw's full security recommendations:
 
 1. **Sandboxed agent execution** — tool calls run in isolated containers
 2. **No network in sandbox** — prevents data exfiltration
@@ -241,6 +277,14 @@ This setup follows OpenClaw's security recommendations:
 4. **Dropped capabilities** — `NET_RAW` and `NET_ADMIN` dropped from gateway
 5. **No-new-privileges** — prevents privilege escalation in gateway
 6. **Non-root user** — gateway runs as `node` (uid 1000)
+
+### Native Mode
+
+Native mode has lighter security controls:
+
+1. **Tool approval policies** — dangerous commands (`rm`, `sudo`, writes to `/etc`, `/usr`) require manual approval
+2. **No Docker sandboxing** — agent commands run directly on the host
+3. **Recommended: run in a VM** — use Multipass, WSL2, or a cloud VM for host isolation
 
 For more, see the [OpenClaw security docs](https://docs.openclaw.ai/gateway/sandboxing).
 

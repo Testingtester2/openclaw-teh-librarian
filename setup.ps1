@@ -70,7 +70,7 @@ if ($Help) {
     Write-Host "  4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090"
     Write-Host "              or qwen3-coder:30b-a3b   (~19GB)   with -Coder"
     Write-Host "  5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)"
-    Write-Host "              or qwen3-coder:30b-a3b   (~32GB)   with -Coder (Q8)"
+    Write-Host "              or qwen3-coder:30b-a3b-q8_0 (~32GB) with -Coder (Q8)"
     exit 0
 }
 
@@ -101,7 +101,7 @@ $TierLabels = @{
     2 = "8GB VRAM    (qwen3.5:9b)             - RTX 3060 / 4060"
     3 = "16GB VRAM   (qwen3.5:27b)            - RTX 4080 / 4070Ti-16GB"
     4 = "24GB VRAM   (qwen3.5:35b)            - RTX 4090"
-    5 = "48GB VRAM   (qwen3.5:35b Q8)         - A6000 / dual GPU (best)"
+    5 = "48GB VRAM   (qwen3.5:35b-q8_0)       - A6000 / dual GPU (best)"
 }
 
 $TierNotes = @{
@@ -158,6 +158,9 @@ if ($InstallMode -eq "") {
 Write-Info "Install mode: $InstallMode"
 
 # -- Tier selection -----------------------------------------------------------
+if ($Cpu -and $Tier -gt 0 -and $Tier -ne 1) {
+    Write-Warn "-Cpu flag overrides -Tier $Tier. Using tier 1 (CPU-only)."
+}
 if ($Cpu) { $Tier = 1 }
 
 if ($Tier -eq 0) {
@@ -222,17 +225,35 @@ Write-Host ""
 ###############################################################################
 if ($InstallMode -eq "docker") {
 
-    # -- Check Docker ---------------------------------------------------------
+    # -- Check / Install Docker ------------------------------------------------
     Write-Info "Checking for Docker..."
 
     $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
     if (-not $dockerCmd) {
+        Write-Warn "Docker is not installed."
+        Write-Host ""
+
+        # Try winget first, fall back to manual instructions
+        $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+        if ($wingetCmd) {
+            Write-Host "  Install Docker Desktop now via winget?" -ForegroundColor White
+            $installChoice = Read-Host "  Install Docker? [Y/n]"
+            if ($installChoice -eq "" -or $installChoice -eq "Y" -or $installChoice -eq "y") {
+                Write-Info "Installing Docker Desktop via winget..."
+                winget install Docker.DockerDesktop --accept-package-agreements --accept-source-agreements
+                Write-Host ""
+                Write-Warn "Docker Desktop installed. Please open it from the Start menu to start the daemon,"
+                Write-Warn "then re-run this script."
+                exit 0
+            }
+        }
+
         Write-Err "Docker is not installed."
         Write-Host ""
         Write-Host "  Install Docker Desktop from:"
         Write-Host "    https://www.docker.com/products/docker-desktop/" -ForegroundColor Cyan
         Write-Host ""
-        Write-Host "  After installing, restart this script."
+        Write-Host "  After installing and starting it, re-run this script."
         exit 1
     }
 
@@ -320,7 +341,7 @@ if ($InstallMode -eq "docker") {
     $configPath = Join-Path $scriptDir "openclaw" "config.json5"
     if (Test-Path $configPath) {
         $content = Get-Content $configPath -Raw
-        $content = $content -replace 'name: "qwen[^"]*"', "name: `"$Model`""
+        $content = $content -replace 'name: "[^"]*"', "name: `"$Model`""
         Set-Content -Path $configPath -Value $content -NoNewline
         Write-Ok "Config updated: model set to $Model"
     } else {
