@@ -3,10 +3,11 @@
 #
 # What this does:
 #   1. Checks for Docker Desktop (links to install if missing)
-#   2. Starts Ollama + CoPaw via Docker Compose
+#   2. Starts Ollama + OpenClaw Gateway via Docker Compose
 #   3. Pulls the Qwen3 8B model (Q4_K_M, ~5GB)
-#   4. Deploys The Librarian's personality and skills
-#   5. Opens the CoPaw console in your browser
+#   4. Builds the sandbox image for isolated agent execution
+#   5. Deploys The Librarian's personality (SOUL.md) and skills
+#   6. Opens the OpenClaw dashboard in your browser
 #
 # Usage (run in PowerShell):
 #   .\setup.ps1            # GPU mode (NVIDIA)
@@ -22,15 +23,15 @@ $ErrorActionPreference = "Stop"
 
 # -- Banner -------------------------------------------------------------------
 Write-Host ""
-Write-Host "  +==========================================================+" -ForegroundColor Cyan
-Write-Host "  |                                                          |" -ForegroundColor Cyan
-Write-Host "  |   The Librarian                                          |" -ForegroundColor Cyan
-Write-Host "  |   Keeper of the Ancient Code                             |" -ForegroundColor Cyan
-Write-Host "  |                                                          |" -ForegroundColor Cyan
-Write-Host "  |   A Shiba dev-sage from Shibatopia                       |" -ForegroundColor Cyan
-Write-Host "  |   Powered by CoPaw + Ollama + Qwen3                     |" -ForegroundColor Cyan
-Write-Host "  |                                                          |" -ForegroundColor Cyan
-Write-Host "  +==========================================================+" -ForegroundColor Cyan
+Write-Host "  +========================================================+" -ForegroundColor Cyan
+Write-Host "  |                                                        |" -ForegroundColor Cyan
+Write-Host "  |   The Librarian                                        |" -ForegroundColor Cyan
+Write-Host "  |   Keeper of the Ancient Code                           |" -ForegroundColor Cyan
+Write-Host "  |                                                        |" -ForegroundColor Cyan
+Write-Host "  |   A Shiba dev-sage from Shibatopia                     |" -ForegroundColor Cyan
+Write-Host "  |   Powered by OpenClaw + Ollama + Qwen3                 |" -ForegroundColor Cyan
+Write-Host "  |                                                        |" -ForegroundColor Cyan
+Write-Host "  +========================================================+" -ForegroundColor Cyan
 Write-Host ""
 
 if ($Help) {
@@ -107,8 +108,8 @@ Write-Info "Pulling Docker images (first run may take a few minutes)..."
 & docker compose @composeFiles pull
 if ($LASTEXITCODE -ne 0) { Write-Err "Failed to pull images."; exit 1 }
 
-Write-Info "Starting Ollama + CoPaw..."
-& docker compose @composeFiles up -d ollama copaw
+Write-Info "Starting Ollama + OpenClaw Gateway..."
+& docker compose @composeFiles up -d ollama openclaw-gateway
 if ($LASTEXITCODE -ne 0) { Write-Err "Failed to start services."; exit 1 }
 
 # Wait for Ollama
@@ -138,42 +139,65 @@ Write-Host ""
 if ($LASTEXITCODE -ne 0) { Write-Err "Failed to pull model."; exit 1 }
 Write-Ok "Model downloaded and ready."
 
-# Wait for CoPaw
-Write-Info "Waiting for CoPaw to start..."
+# -- Build Sandbox Image ------------------------------------------------------
+Write-Info "Building sandbox image for agent isolation..."
+$sandboxExists = docker image inspect openclaw-sandbox:bookworm-slim 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Ok "Sandbox image already exists."
+} else {
+    $dockerfile = @"
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl jq git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -s /bin/bash sandbox
+USER sandbox
+WORKDIR /home/sandbox
+"@
+    $dockerfile | docker build -t openclaw-sandbox:bookworm-slim -f - .
+    if ($LASTEXITCODE -ne 0) { Write-Err "Failed to build sandbox image."; exit 1 }
+    Write-Ok "Sandbox image built."
+}
+
+# Wait for OpenClaw Gateway
+Write-Info "Waiting for OpenClaw Gateway to start..."
 $retries = 0
 do {
     Start-Sleep -Seconds 2
     $retries++
     try {
-        $resp = Invoke-WebRequest -Uri "http://localhost:8088" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
+        $resp = Invoke-WebRequest -Uri "http://localhost:18789/healthz" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
         if ($resp.StatusCode -eq 200) { break }
     } catch {}
     if ($retries -ge $maxRetries) {
-        Write-Err "CoPaw failed to start after 60 seconds."
-        Write-Host "  Check logs: docker compose logs copaw"
+        Write-Err "OpenClaw Gateway failed to start after 60 seconds."
+        Write-Host "  Check logs: docker compose logs openclaw-gateway"
         exit 1
     }
 } while ($true)
-Write-Ok "CoPaw is running."
+Write-Ok "OpenClaw Gateway is running."
 
 # -- Done! --------------------------------------------------------------------
 Write-Host ""
-Write-Host "  ==========================================================" -ForegroundColor Green
+Write-Host "  ========================================================" -ForegroundColor Green
 Write-Host "    The Librarian is ready!" -ForegroundColor Green
-Write-Host "  ==========================================================" -ForegroundColor Green
+Write-Host "  ========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Open in your browser:"
-Write-Host "    http://localhost:8088" -ForegroundColor Cyan
+Write-Host "    http://localhost:18789" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Useful commands:"
-Write-Host "    docker compose logs -f copaw     # Watch CoPaw logs"
-Write-Host "    docker compose logs -f ollama    # Watch Ollama logs"
-Write-Host "    docker compose down              # Stop everything"
-Write-Host "    docker compose up -d             # Restart"
+Write-Host "    docker compose logs -f openclaw-gateway   # Watch OpenClaw logs"
+Write-Host "    docker compose logs -f ollama             # Watch Ollama logs"
+Write-Host "    docker compose down                       # Stop everything"
+Write-Host "    docker compose up -d                      # Restart"
+Write-Host ""
+Write-Host "  Sandboxing:" -ForegroundColor Yellow
+Write-Host "    Agent tool execution runs inside isolated Docker containers."
+Write-Host "    Sandbox containers have no network access by default."
+Write-Host "    Edit openclaw/config.json5 to adjust sandbox settings."
 Write-Host ""
 Write-Host "  The Librarian guards the Ancient Lore. May your code be" -ForegroundColor Yellow
 Write-Host "  free of Shadowcats." -ForegroundColor Yellow
 Write-Host ""
 
 # Open browser
-Start-Process "http://localhost:8088"
+Start-Process "http://localhost:18789"

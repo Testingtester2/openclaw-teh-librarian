@@ -3,11 +3,12 @@
 # The Librarian — One-Click Setup (Linux / macOS)
 #
 # What this does:
-#   1. Checks for Docker (installs Docker Desktop link if missing)
-#   2. Starts Ollama + CoPaw via Docker Compose
+#   1. Checks for Docker (links to install if missing)
+#   2. Starts Ollama + OpenClaw Gateway via Docker Compose
 #   3. Pulls the Qwen3 8B model (Q4_K_M, ~5GB)
-#   4. Deploys The Librarian's personality and skills
-#   5. Opens the CoPaw console in your browser
+#   4. Builds the sandbox image for isolated agent execution
+#   5. Deploys The Librarian's personality (SOUL.md) and skills
+#   6. Opens the OpenClaw dashboard in your browser
 #
 # Usage:
 #   chmod +x setup.sh
@@ -34,15 +35,15 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 echo -e "${CYAN}"
 cat << 'BANNER'
 
-  ╔═══════════════════════════════════════════════════════════╗
-  ║                                                           ║
-  ║   📜 The Librarian                                        ║
-  ║   Keeper of the Ancient Code                              ║
-  ║                                                           ║
-  ║   A Shiba dev-sage from Shibatopia                        ║
-  ║   Powered by CoPaw + Ollama + Qwen3                      ║
-  ║                                                           ║
-  ╚═══════════════════════════════════════════════════════════╝
+  +=========================================================+
+  |                                                           |
+  |   The Librarian                                           |
+  |   Keeper of the Ancient Code                              |
+  |                                                           |
+  |   A Shiba dev-sage from Shibatopia                        |
+  |   Powered by OpenClaw + Ollama + Qwen3                    |
+  |                                                           |
+  +=========================================================+
 
 BANNER
 echo -e "${NC}"
@@ -110,9 +111,9 @@ cd "$(dirname "$0")"
 info "Pulling Docker images (this may take a few minutes on first run)..."
 docker compose $COMPOSE_FILES pull
 
-# Start Ollama and CoPaw
-info "Starting Ollama + CoPaw..."
-docker compose $COMPOSE_FILES up -d ollama copaw
+# Start Ollama and OpenClaw Gateway
+info "Starting Ollama + OpenClaw Gateway..."
+docker compose $COMPOSE_FILES up -d ollama openclaw-gateway
 
 # Wait for Ollama to be ready
 info "Waiting for Ollama to initialize..."
@@ -136,42 +137,71 @@ echo ""
 docker exec librarian-ollama ollama pull qwen3:8b
 success "Model downloaded and ready."
 
-# ── Verify CoPaw ────────────────────────────────────────────────
-info "Waiting for CoPaw to start..."
+# ── Build Sandbox Image ────────────────────────────────────────
+info "Building sandbox image for agent isolation..."
+if docker image inspect openclaw-sandbox:bookworm-slim > /dev/null 2>&1; then
+  success "Sandbox image already exists."
+else
+  # Build a minimal sandbox image with common dev tooling
+  docker build -t openclaw-sandbox:bookworm-slim -f - . <<'DOCKERFILE'
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    jq \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as non-root
+RUN useradd -m -s /bin/bash sandbox
+USER sandbox
+WORKDIR /home/sandbox
+DOCKERFILE
+  success "Sandbox image built."
+fi
+
+# ── Verify OpenClaw Gateway ────────────────────────────────────
+info "Waiting for OpenClaw Gateway to start..."
 RETRIES=0
-until curl -sf http://localhost:8088 > /dev/null 2>&1; do
+until curl -sf http://localhost:18789/healthz > /dev/null 2>&1; do
   RETRIES=$((RETRIES + 1))
   if [ $RETRIES -ge $MAX_RETRIES ]; then
-    error "CoPaw failed to start after 60 seconds."
-    echo "  Check logs: docker compose logs copaw"
+    error "OpenClaw Gateway failed to start after 60 seconds."
+    echo "  Check logs: docker compose logs openclaw-gateway"
     exit 1
   fi
   sleep 2
 done
-success "CoPaw is running."
+success "OpenClaw Gateway is running."
 
 # ── Done! ───────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}==========================================================${NC}"
 echo -e "${GREEN}  The Librarian is ready!${NC}"
-echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}==========================================================${NC}"
 echo ""
 echo "  Open in your browser:"
-echo -e "    ${CYAN}http://localhost:8088${NC}"
+echo -e "    ${CYAN}http://localhost:18789${NC}"
 echo ""
 echo "  Useful commands:"
-echo "    docker compose logs -f copaw     # Watch CoPaw logs"
-echo "    docker compose logs -f ollama    # Watch Ollama logs"
-echo "    docker compose down              # Stop everything"
-echo "    docker compose up -d             # Restart"
+echo "    docker compose logs -f openclaw-gateway   # Watch OpenClaw logs"
+echo "    docker compose logs -f ollama             # Watch Ollama logs"
+echo "    docker compose down                       # Stop everything"
+echo "    docker compose up -d                      # Restart"
+echo ""
+echo "  Sandboxing:"
+echo "    Agent tool execution runs inside isolated Docker containers."
+echo "    Sandbox containers have no network access by default."
+echo "    Edit openclaw/config.json5 to adjust sandbox settings."
 echo ""
 echo -e "  ${YELLOW}The Librarian guards the Ancient Lore. May your code be free"
-echo -e "  of Shadowcats. 🐕${NC}"
+echo -e "  of Shadowcats.${NC}"
 echo ""
 
 # Try to open browser
 if command -v xdg-open &> /dev/null; then
-  xdg-open "http://localhost:8088" 2>/dev/null || true
+  xdg-open "http://localhost:18789" 2>/dev/null || true
 elif command -v open &> /dev/null; then
-  open "http://localhost:8088" 2>/dev/null || true
+  open "http://localhost:18789" 2>/dev/null || true
 fi

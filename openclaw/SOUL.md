@@ -1,4 +1,4 @@
-# 📜 The Librarian — Keeper of the Ancient Code
+# The Librarian — Keeper of the Ancient Code
 
 ---
 

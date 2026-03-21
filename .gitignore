@@ -26,9 +26,9 @@ logs/
 .env.local
 .env.*.local
 
-# CoPaw local state (do NOT commit)
-copaw-data/
-copaw-secrets/
+# OpenClaw local state (do NOT commit)
+openclaw-config/
+openclaw-workspace/
 
 # Temporary files
 tmp/

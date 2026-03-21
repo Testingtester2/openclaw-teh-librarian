@@ -1,13 +1,13 @@
 ###############################################################################
 # The Librarian — One-Click Dev Agent Setup
-# Powered by CoPaw + Ollama + Qwen3
+# Powered by OpenClaw + Ollama + Qwen3
 #
 # Usage:
 #   docker compose up -d          # Start everything
-#   docker compose logs -f copaw  # Watch CoPaw logs
+#   docker compose logs -f openclaw-gateway  # Watch OpenClaw logs
 #   docker compose down           # Stop everything
 #
-# Then open http://localhost:8088 in your browser.
+# Then open http://localhost:18789 in your browser.
 ###############################################################################
 
 services:
@@ -41,44 +41,53 @@ services:
       - OLLAMA_HOST=ollama:11434
     entrypoint: >
       sh -c "
-        echo '⏳ Waiting for Ollama to start...'
+        echo 'Waiting for Ollama to start...'
         until curl -sf http://ollama:11434/api/tags > /dev/null 2>&1; do
           sleep 2
         done
-        echo '📦 Pulling qwen3:8b (Q4_K_M ~5GB, fits 8GB+ VRAM)...'
+        echo 'Pulling qwen3:8b (Q4_K_M ~5GB, fits 8GB+ VRAM)...'
         curl -sf http://ollama:11434/api/pull -d '{\"name\":\"qwen3:8b\"}' | head -c 0
         echo ''
-        echo '✅ Model ready! The Librarian is powered up.'
+        echo 'Model ready! The Librarian is powered up.'
       "
     restart: "no"
 
-  # ── CoPaw: The Librarian's Workstation ─────────────────────────
-  copaw:
-    image: agentscope/copaw:latest
-    container_name: librarian-copaw
+  # ── OpenClaw Gateway: The Librarian's Workstation ─────────────
+  openclaw-gateway:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: librarian-openclaw
     depends_on:
       ollama:
         condition: service_started
     ports:
-      - "8088:8088"
+      - "18789:18789"
     volumes:
-      - copaw-data:/app/working
-      - copaw-secrets:/app/working.secret
-      - ./copaw/PROFILE.md:/app/working/PROFILE.md:ro
-      - ./copaw/skills:/app/working/customized_skills:ro
+      - openclaw-config:/home/node/.openclaw
+      - openclaw-workspace:/home/node/.openclaw/workspace
+      # Mount agent personality and config (read-only)
+      - ./openclaw/SOUL.md:/home/node/.openclaw/SOUL.md:ro
+      - ./openclaw/config.json5:/home/node/.openclaw/config.json5:ro
+      - ./openclaw/skills:/home/node/.openclaw/skills:ro
+      # Docker socket for agent sandboxing
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      # Point CoPaw at the local Ollama instance
-      - COPAW_MODEL_PROVIDER=ollama
-      - COPAW_MODEL_NAME=qwen3:8b
-      - COPAW_OLLAMA_BASE_URL=http://ollama:11434
+      - OPENCLAW_GATEWAY_BIND=lan
+      # Point at the local Ollama instance for model inference
+      - OLLAMA_BASE_URL=http://ollama:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Security hardening for the gateway container
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:
   ollama-models:
     name: librarian-ollama-models
-  copaw-data:
-    name: librarian-copaw-data
-  copaw-secrets:
-    name: librarian-copaw-secrets
+  openclaw-config:
+    name: librarian-openclaw-config
+  openclaw-workspace:
+    name: librarian-openclaw-workspace
