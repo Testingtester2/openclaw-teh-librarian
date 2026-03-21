@@ -1,14 +1,14 @@
 {
   // ── The Librarian — OpenClaw Configuration ──────────────────────
   //
-  // Model: Qwen3 8B via local Ollama
+  // Model: Qwen3.5 9B via local Ollama
   // Sandbox: Docker-based isolation for all agent tool execution
   // Gateway: LAN-accessible for browser dashboard
 
   // Model provider configuration
   model: {
     provider: "ollama",
-    name: "qwen3:8b",
+    name: "qwen3.5:9b",
     ollama: {
       baseUrl: "http://ollama:11434"
     }

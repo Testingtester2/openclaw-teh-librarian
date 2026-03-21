@@ -16,11 +16,11 @@
 #   .\setup.ps1 -Tier 3             # Skip menu, use tier 3 (12GB)
 #
 # Model Tiers:
-#   1  CPU-only   qwen3:4b              (~2.6GB)  Needs 8GB+ RAM
-#   2  8GB VRAM   qwen3:8b              (~5GB)    RTX 3060 / 4060
-#   3  12GB VRAM  qwen3:14b             (~9.3GB)  RTX 4070 / 3060-12GB
-#   4  16GB VRAM  qwen3-coder:30b-a3b   (~19GB)   RTX 4080 / 4070Ti-16GB
-#   5  32GB VRAM  qwen3-coder:30b-a3b   (~32GB)   RTX 4090 / A6000 (Q8)
+#   1  CPU-only   qwen3.5:4b            (~3.4GB)  Needs 8GB+ RAM
+#   2  8GB VRAM   qwen3.5:9b            (~6.6GB)  RTX 3060 / 4060
+#   3  16GB VRAM  qwen3.5:27b           (~17GB)   RTX 4080 / 4070Ti-16GB
+#   4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090
+#   5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)
 ###############################################################################
 
 param(
@@ -39,7 +39,7 @@ Write-Host "  |   The Librarian                                        |" -Foreg
 Write-Host "  |   Keeper of the Ancient Code                           |" -ForegroundColor Cyan
 Write-Host "  |                                                        |" -ForegroundColor Cyan
 Write-Host "  |   A Shiba dev-sage from Shibatopia                     |" -ForegroundColor Cyan
-Write-Host "  |   Powered by OpenClaw + Ollama + Qwen3                 |" -ForegroundColor Cyan
+Write-Host "  |   Powered by OpenClaw + Ollama + Qwen3.5               |" -ForegroundColor Cyan
 Write-Host "  |                                                        |" -ForegroundColor Cyan
 Write-Host "  +========================================================+" -ForegroundColor Cyan
 Write-Host ""
@@ -48,15 +48,15 @@ if ($Help) {
     Write-Host "Usage: .\setup.ps1 [-Cpu] [-Tier <1-5>]"
     Write-Host ""
     Write-Host "Options:"
-    Write-Host "  -Cpu         Run without GPU (CPU-only inference, uses qwen3:4b)"
+    Write-Host "  -Cpu         Run without GPU (CPU-only inference, uses qwen3.5:4b)"
     Write-Host "  -Tier <N>    Skip the interactive menu and use tier N directly"
     Write-Host ""
     Write-Host "Tiers:"
-    Write-Host "  1  CPU-only   qwen3:4b              (~2.6GB)  Needs 8GB+ RAM"
-    Write-Host "  2  8GB VRAM   qwen3:8b              (~5GB)    RTX 3060 / 4060"
-    Write-Host "  3  12GB VRAM  qwen3:14b             (~9.3GB)  RTX 4070 / 3060-12GB"
-    Write-Host "  4  16GB VRAM  qwen3-coder:30b-a3b   (~19GB)   RTX 4080 / 4070Ti-16GB"
-    Write-Host "  5  32GB VRAM  qwen3-coder:30b-a3b   (~32GB)   RTX 4090 / A6000 (Q8)"
+    Write-Host "  1  CPU-only   qwen3.5:4b            (~3.4GB)  Needs 8GB+ RAM"
+    Write-Host "  2  8GB VRAM   qwen3.5:9b            (~6.6GB)  RTX 3060 / 4060"
+    Write-Host "  3  16GB VRAM  qwen3.5:27b           (~17GB)   RTX 4080 / 4070Ti-16GB"
+    Write-Host "  4  24GB VRAM  qwen3.5:35b           (~24GB)   RTX 4090"
+    Write-Host "  5  48GB VRAM  qwen3.5:35b-q8_0      (~35GB)   A6000 / dual GPU (Q8)"
     exit 0
 }
 
@@ -67,35 +67,35 @@ function Write-Err($msg)     { Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
 # -- Model tier definitions ---------------------------------------------------
 $TierModels = @{
-    1 = "qwen3:4b"
-    2 = "qwen3:8b"
-    3 = "qwen3:14b"
-    4 = "qwen3-coder:30b-a3b"
-    5 = "qwen3-coder:30b-a3b-q8_0"
+    1 = "qwen3.5:4b"
+    2 = "qwen3.5:9b"
+    3 = "qwen3.5:27b"
+    4 = "qwen3.5:35b"
+    5 = "qwen3.5:35b-q8_0"
 }
 
 $TierSizes = @{
-    1 = "~2.6GB"
-    2 = "~5GB"
-    3 = "~9.3GB"
-    4 = "~19GB"
-    5 = "~32GB"
+    1 = "~3.4GB"
+    2 = "~6.6GB"
+    3 = "~17GB"
+    4 = "~24GB"
+    5 = "~35GB"
 }
 
 $TierLabels = @{
-    1 = "CPU-only    (qwen3:4b)              - Lightweight, needs 8GB+ RAM"
-    2 = "8GB VRAM    (qwen3:8b)              - RTX 3060 / 4060"
-    3 = "12GB VRAM   (qwen3:14b)             - RTX 4070 / 3060-12GB"
-    4 = "16GB VRAM   (qwen3-coder:30b-a3b)   - RTX 4080 / 4070Ti-16GB"
-    5 = "32GB VRAM   (qwen3-coder:30b-a3b Q8)- RTX 4090 / A6000 (best)"
+    1 = "CPU-only    (qwen3.5:4b)             - Lightweight, needs 8GB+ RAM"
+    2 = "8GB VRAM    (qwen3.5:9b)             - RTX 3060 / 4060"
+    3 = "16GB VRAM   (qwen3.5:27b)            - RTX 4080 / 4070Ti-16GB"
+    4 = "24GB VRAM   (qwen3.5:35b)            - RTX 4090"
+    5 = "48GB VRAM   (qwen3.5:35b Q8)         - A6000 / dual GPU (best)"
 }
 
 $TierNotes = @{
     1 = "4B params - lightweight model for CPU inference. Needs 8GB+ system RAM."
-    2 = "8B params, Q4_K_M quantization - fits comfortably in 8GB VRAM."
-    3 = "14B params, Q4_K_M quantization - strong reasoning, fits 12GB VRAM."
-    4 = "30B MoE (3B active), Q4_K_M - coding-specialized agent model for 16GB VRAM."
-    5 = "30B MoE (3B active), Q8_0 - max quality coding agent for 32GB VRAM."
+    2 = "9B params, Q4_K_M quantization - fits comfortably in 8GB VRAM."
+    3 = "27B params, Q4_K_M quantization - strong reasoning, 256K context."
+    4 = "35B params, Q4_K_M quantization - best quality dense model for 24GB VRAM."
+    5 = "35B params, Q8_0 - max quality for 48GB+ VRAM."
 }
 
 # -- Check Docker -------------------------------------------------------------
@@ -227,7 +227,7 @@ Write-Info "Configuring OpenClaw to use $Model..."
 $configPath = Join-Path $scriptDir "openclaw" "config.json5"
 if (Test-Path $configPath) {
     $content = Get-Content $configPath -Raw
-    $content = $content -replace 'name: "qwen3[^"]*"', "name: `"$Model`""
+    $content = $content -replace 'name: "qwen[^"]*"', "name: `"$Model`""
     Set-Content -Path $configPath -Value $content -NoNewline
     Write-Ok "Config updated: model set to $Model"
 } else {

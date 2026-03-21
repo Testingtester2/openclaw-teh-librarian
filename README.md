@@ -5,8 +5,8 @@
 The Librarian is a **one-click local AI developer assistant** built on
 [OpenClaw](https://github.com/openclaw/openclaw) +
 [Ollama](https://ollama.com) +
-[Qwen3](https://github.com/QwenLM/Qwen3). Pick a model tier to match your
-GPU (8GB–32GB VRAM) or run CPU-only. Everything runs on your machine — no
+[Qwen3.5](https://github.com/QwenLM/Qwen3.5). Pick a model tier to match your
+GPU (8GB–48GB VRAM) or run CPU-only. Everything runs on your machine — no
 API keys, no cloud, no data leaving your network.
 
 Agent tool execution is **sandboxed inside isolated Docker containers** with
@@ -61,7 +61,7 @@ cd openclaw-agents
 The setup script will:
 1. Ask you to pick a model tier (or use `--tier`/`--cpu`)
 2. Pull and start Ollama in Docker
-3. Download the selected Qwen3 model
+3. Download the selected Qwen3.5 model
 4. Configure OpenClaw to use it
 5. Start the OpenClaw Gateway with The Librarian's personality
 6. Build a sandbox image for isolated agent tool execution
@@ -79,7 +79,7 @@ docker compose up -d
 docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
 
 # Pull a model (pick one from the tier table below)
-docker exec librarian-ollama ollama pull qwen3:8b
+docker exec librarian-ollama ollama pull qwen3.5:9b
 
 # Update config to match
 # Edit openclaw/config.json5 → model.name
@@ -135,15 +135,16 @@ To adjust sandbox settings, edit `openclaw/config.json5`. See the
 ### Model Tiers
 
 The installer lets you pick a model based on your hardware. All models are
-from the [Qwen3](https://github.com/QwenLM/Qwen3) family, Apache 2.0 licensed.
+from the [Qwen3.5](https://github.com/QwenLM/Qwen3.5) family, Apache 2.0 licensed,
+with 256K native context window.
 
 | Tier | GPU Examples | Model | Params | Quant | Download | Min VRAM | Notes |
 |------|-------------|-------|--------|-------|----------|----------|-------|
-| 1 — CPU | No GPU needed | `qwen3:4b` | 4B | Q4_K_M | ~2.6GB | N/A (8GB+ RAM) | Fast on modern CPUs. Good for simple tasks |
-| 2 — 8GB | RTX 3060 / 4060 | `qwen3:8b` | 8B | Q4_K_M | ~5GB | 6GB | **Default tier.** Strong all-round coding |
-| 3 — 12GB | RTX 4070 / 3060-12GB | `qwen3:14b` | 14B | Q4_K_M | ~9.3GB | 10GB | Big jump in reasoning & code quality |
-| 4 — 16GB | RTX 4080 / 4070Ti-16GB | `qwen3-coder:30b-a3b` | 30B MoE (3B active) | Q4_K_M | ~19GB | 14GB | Coding-specialized agent model, 256K context |
-| 5 — 32GB | RTX 4090 / A6000 | `qwen3-coder:30b-a3b-q8_0` | 30B MoE (3B active) | Q8_0 | ~32GB | 28GB | Max quality coding agent |
+| 1 — CPU | No GPU needed | `qwen3.5:4b` | 4B | Q4_K_M | ~3.4GB | N/A (8GB+ RAM) | Fast on modern CPUs. Good for simple tasks |
+| 2 — 8GB | RTX 3060 / 4060 | `qwen3.5:9b` | 9B | Q4_K_M | ~6.6GB | 6GB | **Default tier.** Strong all-round coding |
+| 3 — 16GB | RTX 4080 / 4070Ti-16GB | `qwen3.5:27b` | 27B | Q4_K_M | ~17GB | 14GB | Big jump in reasoning & code quality |
+| 4 — 24GB | RTX 4090 | `qwen3.5:35b` | 35B | Q4_K_M | ~24GB | 20GB | Best quality dense model |
+| 5 — 48GB | A6000 / dual GPU | `qwen3.5:35b-q8_0` | 35B | Q8_0 | ~35GB | 40GB | Max quality (Q8 quantization) |
 
 **Which tier should I pick?**
 - Run `nvidia-smi` to check your VRAM
@@ -154,10 +155,10 @@ from the [Qwen3](https://github.com/QwenLM/Qwen3) family, Apache 2.0 licensed.
 **Switching tiers later:**
 ```bash
 # Pull the new model
-docker exec librarian-ollama ollama pull qwen3:14b
+docker exec librarian-ollama ollama pull qwen3.5:27b
 
 # Update config
-# Edit openclaw/config.json5 → change model.name to "qwen3:14b"
+# Edit openclaw/config.json5 → change model.name to "qwen3.5:27b"
 
 # Restart gateway to pick up the change
 docker compose restart openclaw-gateway
@@ -182,7 +183,7 @@ docker compose up -d
 docker compose pull && docker compose up -d
 
 # Switch models (e.g., smaller for weaker hardware)
-docker exec librarian-ollama ollama pull qwen3:4b
+docker exec librarian-ollama ollama pull qwen3.5:4b
 
 # Rebuild sandbox image
 docker build -t openclaw-sandbox:bookworm-slim -f - . < sandbox.Dockerfile
@@ -198,9 +199,9 @@ See the **Model Tiers** table above for full details. Quick summary:
 |----------|------|-------------------------|----------------|
 | No GPU | — | `--tier 1` or `--cpu` | Usable (CPU inference) |
 | RTX 3060 / 4060 | 8GB | `--tier 2` | Good (~40 tok/s) |
-| RTX 4070 / 3060-12GB | 12GB | `--tier 3` | Great (~60 tok/s) |
-| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 4` | Excellent (MoE, fast) |
-| RTX 4090 / A6000 | 24-48GB | `--tier 5` | Best quality (MoE Q8) |
+| RTX 4080 / 4070Ti-16GB | 16GB | `--tier 3` | Great (~30 tok/s) |
+| RTX 4090 | 24GB | `--tier 4` | Excellent (~25 tok/s) |
+| A6000 / dual GPU | 48GB+ | `--tier 5` | Best quality (Q8) |
 
 Speeds are approximate and depend on context length and system configuration.
 
